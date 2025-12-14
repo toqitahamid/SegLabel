@@ -638,6 +638,7 @@ class DrawingCanvas(QLabel):
         # Shapes
         self.syringe_shapes: List[Shape] = []
         self.gas_shapes: List[Shape] = []
+        self.eraser_shapes: List[Shape] = []  # Eraser shapes (subtract from gas)
         
         # Display settings
         self.overlay_opacity = 0.5
@@ -659,6 +660,16 @@ class DrawingCanvas(QLabel):
     def set_gas_shapes(self, shapes: List[Shape]):
         """Set gas shapes."""
         self.gas_shapes = shapes
+        self.update_display()
+    
+    def set_eraser_shapes(self, shapes: List[Shape]):
+        """Set eraser shapes."""
+        self.eraser_shapes = shapes
+        self.update_display()
+    
+    def clear_eraser_shapes(self):
+        """Clear all eraser shapes."""
+        self.eraser_shapes = []
         self.update_display()
     
     def set_existing_mask(self, mask: Optional[np.ndarray]):
@@ -718,6 +729,10 @@ class DrawingCanvas(QLabel):
         if self.original_image is None:
             return
         
+        # #region agent log
+        import json as _json; open(r'd:\data\Methane Ratio\.cursor\debug.log', 'a').write(_json.dumps({"location":"mask_annotator.py:update_display:entry","message":"update_display called","data":{"image_shape":list(self.original_image.shape),"is_grayscale":len(self.original_image.shape)==2},"timestamp":__import__('time').time()*1000,"sessionId":"debug-session","hypothesisId":"A,C"})+'\n')
+        # #endregion
+        
         # Create display image (RGB)
         if len(self.original_image.shape) == 2:
             display = cv2.cvtColor(self.original_image, cv2.COLOR_GRAY2RGB)
@@ -732,27 +747,48 @@ class DrawingCanvas(QLabel):
             
             # Draw existing mask if in verification mode
             if self.existing_mask is not None:
-                # Syringe regions (value 100) - Blue
-                syringe_region = (self.existing_mask == 100)
-                overlay[syringe_region] = [59, 130, 246]  # Blue
-                
-                # Gas regions (value 255) - Amber/Orange
-                gas_region = (self.existing_mask == 255)
-                overlay[gas_region] = [245, 158, 11]  # Amber
+            # Syringe regions (value 100) - Blue
+            syringe_region = (self.existing_mask == 100)
+            # #region agent log
+            import json as _json; open(r'd:\data\Methane Ratio\.cursor\debug.log', 'a').write(_json.dumps({"location":"mask_annotator.py:update_display:existing_mask_syringe","message":"Coloring existing mask syringe region","data":{"syringe_pixel_count":int(syringe_region.sum()),"color_assigned":"[59, 130, 246] in BGR = B59,G130,R246 = salmon/pink NOT blue"},"timestamp":__import__('time').time()*1000,"sessionId":"debug-session","hypothesisId":"A"})+'\n')
+            # #endregion
+            overlay[syringe_region] = [59, 130, 246]  # Blue
+            
+            # Gas regions (value 255) - Amber/Orange
+            gas_region = (self.existing_mask == 255)
+            # #region agent log
+            import json as _json; open(r'd:\data\Methane Ratio\.cursor\debug.log', 'a').write(_json.dumps({"location":"mask_annotator.py:update_display:existing_mask_gas","message":"Coloring existing mask gas region","data":{"gas_pixel_count":int(gas_region.sum()),"color_assigned":"[245, 158, 11] in BGR = B245,G158,R11 = cyan NOT amber"},"timestamp":__import__('time').time()*1000,"sessionId":"debug-session","hypothesisId":"A"})+'\n')
+            # #endregion
+            overlay[syringe_region] = [245, 158, 11]  # Amber
             
             # Draw syringe shapes - Blue
+            # #region agent log
+            import json as _json; open(r'd:\data\Methane Ratio\.cursor\debug.log', 'a').write(_json.dumps({"location":"mask_annotator.py:update_display:draw_syringe","message":"Drawing syringe shapes","data":{"num_syringe_shapes":len(self.syringe_shapes),"color_used_BGR_order":"(59, 130, 246) - comment says Blue but in BGR this is B=59,G=130,R=246 which is SALMON not blue"},"timestamp":__import__('time').time()*1000,"sessionId":"debug-session","hypothesisId":"A"})+'\n')
+            # #endregion
             for shape in self.syringe_shapes:
                 pts = shape.to_numpy()
                 if len(pts) >= 3:
                     cv2.fillPoly(overlay, [pts], (59, 130, 246))
             
             # Draw gas shapes - Amber
+            # #region agent log
+            import json as _json; open(r'd:\data\Methane Ratio\.cursor\debug.log', 'a').write(_json.dumps({"location":"mask_annotator.py:update_display:draw_gas","message":"Drawing gas shapes","data":{"num_gas_shapes":len(self.gas_shapes),"color_used_BGR_order":"(245, 158, 11) - comment says Amber but in BGR this is B=245,G=158,R=11 which is CYAN not amber"},"timestamp":__import__('time').time()*1000,"sessionId":"debug-session","hypothesisId":"A"})+'\n')
+            # #endregion
             for shape in self.gas_shapes:
                 pts = shape.to_numpy()
                 if len(pts) >= 3:
                     cv2.fillPoly(overlay, [pts], (245, 158, 11))
                 elif shape.shape_type == 'rectangle' and len(pts) == 2:
                     cv2.rectangle(overlay, tuple(pts[0]), tuple(pts[1]), (245, 158, 11), -1)
+            
+            # Draw eraser shapes - Dark red/maroon (shows as "erased" areas)
+            # #region agent log
+            import json as _json; open(r'd:\data\Methane Ratio\.cursor\debug.log', 'a').write(_json.dumps({"location":"mask_annotator.py:update_display:draw_eraser","message":"Drawing eraser shapes","data":{"num_eraser_shapes":len(self.eraser_shapes),"color_used_BGR_order":"(80, 40, 40) - in BGR this is B=80,G=40,R=40 which is dark BLUE not dark red"},"timestamp":__import__('time').time()*1000,"sessionId":"debug-session","hypothesisId":"D"})+'\n')
+            # #endregion
+            for shape in self.eraser_shapes:
+                pts = shape.to_numpy()
+                if len(pts) >= 3:
+                    cv2.fillPoly(overlay, [pts], (80, 40, 40))  # Dark color to show erasure
             
             # Blend overlay
             alpha = self.overlay_opacity
@@ -776,6 +812,10 @@ class DrawingCanvas(QLabel):
         # Convert BGR to RGB for Qt
         display_rgb = cv2.cvtColor(display_resized, cv2.COLOR_BGR2RGB)
         
+        # #region agent log
+        import json as _json; open(r'd:\data\Methane Ratio\.cursor\debug.log', 'a').write(_json.dumps({"location":"mask_annotator.py:update_display:create_qimage","message":"Creating QImage from numpy buffer","data":{"display_rgb_shape":list(display_rgb.shape),"note":"QImage uses raw buffer pointer - if numpy array goes out of scope, image may corrupt"},"timestamp":__import__('time').time()*1000,"sessionId":"debug-session","hypothesisId":"B"})+'\n')
+        # #endregion
+        
         qimage = QImage(
             display_rgb.data, new_w, new_h, 
             new_w * 3, QImage.Format_RGB888
@@ -795,11 +835,12 @@ class DrawingCanvas(QLabel):
         painter.setRenderHint(QPainter.Antialiasing)
         
         # Set pen based on what we're drawing
+        # NOTE: QColor uses RGB order (correct), but cv2 uses BGR order (bug source!)
         if self.is_drawing_syringe:
-            pen = QPen(QColor(59, 130, 246, 220), 2)
+            pen = QPen(QColor(59, 130, 246, 220), 2)  # QColor(R=59, G=130, B=246) = blue ✓
             brush = QBrush(QColor(59, 130, 246, 80))
         else:
-            pen = QPen(QColor(245, 158, 11, 220), 2)
+            pen = QPen(QColor(245, 158, 11, 220), 2)  # QColor(R=245, G=158, B=11) = amber ✓
             brush = QBrush(QColor(245, 158, 11, 80))
         
         painter.setPen(pen)
@@ -954,7 +995,11 @@ class MethaneAnnotator(QMainWindow):
         # Session state
         self.session = AnnotationSession()
         self.gas_shapes: List[Shape] = []  # Current image's gas shapes
+        self.eraser_shapes: List[Shape] = []  # Current image's eraser shapes
         self.undo_stack = UndoStack()
+        self.is_eraser_mode = False  # Track if we're in eraser mode
+        self.has_unsaved_changes = False  # Track if user made changes to current image
+        self._existing_overlay_visible = True  # Track overlay visibility state
         
         # Setup UI
         self._setup_ui()
@@ -1162,6 +1207,11 @@ class MethaneAnnotator(QMainWindow):
         self.tool_group.addButton(self.rectangle_radio)
         gas_layout.addWidget(self.rectangle_radio)
         
+        self.eraser_radio = QRadioButton("Eraser  (erase gas regions)")
+        self.eraser_radio.setStyleSheet("color: #f87171;")  # Red tint for eraser
+        self.tool_group.addButton(self.eraser_radio)
+        gas_layout.addWidget(self.eraser_radio)
+        
         self.tool_group.buttonClicked.connect(self._on_tool_changed)
         
         # Newly drawn gas actions
@@ -1170,9 +1220,15 @@ class MethaneAnnotator(QMainWindow):
         gas_layout.addWidget(drawn_label)
         
         drawn_btns = QHBoxLayout()
-        self.clear_drawn_gas_btn = QPushButton("🗑️ Clear Drawn")
+        self.clear_drawn_gas_btn = QPushButton("🗑️ Gas")
+        self.clear_drawn_gas_btn.setToolTip("Clear drawn gas shapes")
         self.clear_drawn_gas_btn.clicked.connect(self._clear_drawn_gas)
         drawn_btns.addWidget(self.clear_drawn_gas_btn)
+        
+        self.clear_eraser_btn = QPushButton("🗑️ Eraser")
+        self.clear_eraser_btn.setToolTip("Clear eraser shapes")
+        self.clear_eraser_btn.clicked.connect(self._clear_eraser)
+        drawn_btns.addWidget(self.clear_eraser_btn)
         
         self.undo_btn = QPushButton("↩️")
         self.undo_btn.setToolTip("Undo (Ctrl+Z)")
@@ -1195,11 +1251,11 @@ class MethaneAnnotator(QMainWindow):
         gas_layout.addWidget(self.existing_mask_info)
         
         existing_btns = QHBoxLayout()
-        self.hide_existing_btn = QPushButton("👁️ Hide")
-        self.hide_existing_btn.setToolTip("Hide overlay (file remains)")
-        self.hide_existing_btn.clicked.connect(self._hide_existing_overlay)
-        self.hide_existing_btn.setEnabled(False)
-        existing_btns.addWidget(self.hide_existing_btn)
+        self.toggle_existing_btn = QPushButton("👁️ Hide")
+        self.toggle_existing_btn.setToolTip("Toggle overlay visibility (file remains)")
+        self.toggle_existing_btn.clicked.connect(self._toggle_existing_overlay)
+        self.toggle_existing_btn.setEnabled(False)
+        existing_btns.addWidget(self.toggle_existing_btn)
         
         self.clear_gas_only_btn = QPushButton("🧹 Clear Gas")
         self.clear_gas_only_btn.setToolTip("Remove gas from file, keep syringe")
@@ -1300,7 +1356,7 @@ class MethaneAnnotator(QMainWindow):
             ("←/→ or A/D", "Navigate images"),
             ("S", "Save mask"),
             ("Ctrl+S", "Save & Next"),
-            ("1/2/3", "Polygon/Freehand/Rect"),
+            ("1/2/3/4", "Poly/Free/Rect/Eraser"),
             ("Ctrl+Z/Y", "Undo/Redo"),
             ("X", "Skip image"),
             ("R", "Mark for review"),
@@ -1370,6 +1426,7 @@ class MethaneAnnotator(QMainWindow):
         QShortcut(QKeySequence(Qt.Key_1), self, lambda: self._select_tool('polygon'))
         QShortcut(QKeySequence(Qt.Key_2), self, lambda: self._select_tool('freehand'))
         QShortcut(QKeySequence(Qt.Key_3), self, lambda: self._select_tool('rectangle'))
+        QShortcut(QKeySequence(Qt.Key_4), self, lambda: self._select_tool('eraser'))
         
         # Undo/Redo
         QShortcut(QKeySequence("Ctrl+Z"), self, self._undo)
@@ -1483,10 +1540,13 @@ class MethaneAnnotator(QMainWindow):
         syringe_shapes = self.session.get_syringe_for_index(original_index)
         self.canvas.set_syringe_shapes(syringe_shapes)
         
-        # Clear gas shapes for new image
+        # Clear gas and eraser shapes for new image
         self.gas_shapes.clear()
+        self.eraser_shapes.clear()
         self.undo_stack.clear()
+        self.has_unsaved_changes = False  # Reset change tracking
         self.canvas.set_gas_shapes(self.gas_shapes)
+        self.canvas.set_eraser_shapes(self.eraser_shapes)
         
         # Load existing mask if exists and verification mode is on
         self._load_existing_mask(image_name)
@@ -1523,7 +1583,9 @@ class MethaneAnnotator(QMainWindow):
             syringe_pixels = np.sum(mask == 100)
             self.existing_mask_info.setText(f"✓ Found: Gas={gas_pixels}px, Syringe={syringe_pixels}px")
             self.existing_mask_info.setStyleSheet("color: #3fb950; font-size: 16px;")
-            self.hide_existing_btn.setEnabled(True)
+            self.toggle_existing_btn.setEnabled(True)
+            self.toggle_existing_btn.setText("👁️ Hide")
+            self._existing_overlay_visible = True
             self.clear_gas_only_btn.setEnabled(gas_pixels > 0)  # Only if has gas
             self.delete_existing_btn.setEnabled(True)
         else:
@@ -1534,19 +1596,25 @@ class MethaneAnnotator(QMainWindow):
                 if self._mask_exists(image_name):
                     self.existing_mask_info.setText("Overlay hidden (file exists)")
                     self.existing_mask_info.setStyleSheet("color: #d29922; font-size: 16px;")
-                    self.hide_existing_btn.setEnabled(False)  # Already hidden
+                    self.toggle_existing_btn.setEnabled(True)  # Can toggle to show
+                    self.toggle_existing_btn.setText("👁️ Show")
+                    self._existing_overlay_visible = False
                     self.clear_gas_only_btn.setEnabled(True)  # Can still clear gas from file
                     self.delete_existing_btn.setEnabled(True)
                 else:
                     self.existing_mask_info.setText("No saved mask file")
                     self.existing_mask_info.setStyleSheet("color: #8b949e; font-size: 16px;")
-                    self.hide_existing_btn.setEnabled(False)
+                    self.toggle_existing_btn.setEnabled(False)
+                    self.toggle_existing_btn.setText("👁️ Hide")
+                    self._existing_overlay_visible = True
                     self.clear_gas_only_btn.setEnabled(False)
                     self.delete_existing_btn.setEnabled(False)
             else:
                 self.existing_mask_info.setText("No saved mask file")
                 self.existing_mask_info.setStyleSheet("color: #8b949e; font-size: 16px;")
-                self.hide_existing_btn.setEnabled(False)
+                self.toggle_existing_btn.setEnabled(False)
+                self.toggle_existing_btn.setText("👁️ Hide")
+                self._existing_overlay_visible = True
                 self.clear_gas_only_btn.setEnabled(False)
                 self.delete_existing_btn.setEnabled(False)
     
@@ -1655,6 +1723,10 @@ class MethaneAnnotator(QMainWindow):
     
     def _next_image(self):
         """Go to next image."""
+        # Auto-save current mask before navigating (only if user made changes)
+        if self.has_unsaved_changes and self.session.masks_folder and self.session.images_folder and self.canvas.original_image is not None:
+            self._save_mask(silent=True)
+        
         filtered_list = self._get_filtered_list()
         if self.session.current_index < len(filtered_list) - 1:
             self.session.current_index += 1
@@ -1662,6 +1734,10 @@ class MethaneAnnotator(QMainWindow):
     
     def _prev_image(self):
         """Go to previous image."""
+        # Auto-save current mask before navigating (only if user made changes)
+        if self.has_unsaved_changes and self.session.masks_folder and self.session.images_folder and self.canvas.original_image is not None:
+            self._save_mask(silent=True)
+        
         if self.session.current_index > 0:
             self.session.current_index -= 1
             self._load_current_image()
@@ -1682,6 +1758,8 @@ class MethaneAnnotator(QMainWindow):
     
     def _on_tool_changed(self, button):
         """Handle tool selection change."""
+        self.is_eraser_mode = False
+        
         if button == self.polygon_radio:
             self.canvas.set_tool('polygon')
             self.tool_label.setText("Tool: Polygon")
@@ -1691,15 +1769,31 @@ class MethaneAnnotator(QMainWindow):
         elif button == self.rectangle_radio:
             self.canvas.set_tool('rectangle')
             self.tool_label.setText("Tool: Rectangle")
+        elif button == self.eraser_radio:
+            self.canvas.set_tool('freehand')  # Eraser uses freehand drawing
+            self.is_eraser_mode = True
+            self.tool_label.setText("Tool: Eraser")
+            self.tool_label.setStyleSheet("color: #f87171;")
     
     def _select_tool(self, tool: str):
         """Select tool by name."""
+        self.is_eraser_mode = False
+        self.tool_label.setStyleSheet("color: #fbbf24;")  # Reset to default color
+        
         if tool == 'polygon':
             self.polygon_radio.setChecked(True)
         elif tool == 'freehand':
             self.freehand_radio.setChecked(True)
         elif tool == 'rectangle':
             self.rectangle_radio.setChecked(True)
+        elif tool == 'eraser':
+            self.eraser_radio.setChecked(True)
+            self.is_eraser_mode = True
+            self.tool_label.setStyleSheet("color: #f87171;")
+            self.canvas.set_tool('freehand')  # Eraser uses freehand
+            self.tool_label.setText("Tool: Eraser")
+            return
+            
         self.canvas.set_tool(tool)
         self.tool_label.setText(f"Tool: {tool.capitalize()}")
     
@@ -1720,11 +1814,19 @@ class MethaneAnnotator(QMainWindow):
             self._save_session()
             self.statusBar.showMessage(f"🔵 Syringe shape added (version from image {original_index + 1})")
         else:
-            # Add to gas shapes
-            self.undo_stack.push(self.gas_shapes)
-            self.gas_shapes.append(shape)
-            self.canvas.set_gas_shapes(self.gas_shapes)
-            self.statusBar.showMessage(f"🟠 Gas shape added (total: {len(self.gas_shapes)})")
+            if self.is_eraser_mode:
+                # Add to eraser shapes
+                self.eraser_shapes.append(shape)
+                self.canvas.set_eraser_shapes(self.eraser_shapes)
+                self.has_unsaved_changes = True
+                self.statusBar.showMessage(f"🔴 Eraser shape added (total: {len(self.eraser_shapes)})")
+            else:
+                # Add to gas shapes
+                self.undo_stack.push(self.gas_shapes)
+                self.gas_shapes.append(shape)
+                self.canvas.set_gas_shapes(self.gas_shapes)
+                self.has_unsaved_changes = True
+                self.statusBar.showMessage(f"🟠 Gas shape added (total: {len(self.gas_shapes)})")
     
     def _get_original_index(self) -> int:
         """Get the original index in the full image list for the current image."""
@@ -1803,11 +1905,41 @@ class MethaneAnnotator(QMainWindow):
         else:
             self.statusBar.showMessage("No drawn gas shapes to clear")
     
-    def _hide_existing_overlay(self):
-        """Hide the existing mask overlay (doesn't delete the file)."""
-        self.canvas.set_existing_mask(None)
-        self._update_existing_mask_ui(False)
-        self.statusBar.showMessage("Existing mask overlay hidden (file still exists)")
+    def _clear_eraser(self):
+        """Clear eraser shapes."""
+        if self.eraser_shapes:
+            self.eraser_shapes.clear()
+            self.canvas.clear_eraser_shapes()
+            self.statusBar.showMessage("Eraser shapes cleared")
+        else:
+            self.statusBar.showMessage("No eraser shapes to clear")
+    
+    def _toggle_existing_overlay(self):
+        """Toggle the existing mask overlay visibility (doesn't affect the file)."""
+        filtered_list = self._get_filtered_list()
+        if not filtered_list or not self.session.masks_folder:
+            return
+        
+        image_name = filtered_list[self.session.current_index]
+        mask_path = Path(self.session.masks_folder) / image_name
+        
+        if not mask_path.exists():
+            return
+        
+        if self._existing_overlay_visible:
+            # Hide the overlay
+            self.canvas.set_existing_mask(None)
+            self._existing_overlay_visible = False
+            self.toggle_existing_btn.setText("👁️ Show")
+            self.statusBar.showMessage("Existing mask overlay hidden (file still exists)")
+        else:
+            # Show the overlay
+            mask = cv2.imread(str(mask_path), cv2.IMREAD_GRAYSCALE)
+            if mask is not None:
+                self.canvas.set_existing_mask(mask)
+            self._existing_overlay_visible = True
+            self.toggle_existing_btn.setText("👁️ Hide")
+            self.statusBar.showMessage("Existing mask overlay shown")
     
     def _clear_gas_from_file(self):
         """Remove only gas pixels from the saved mask file, keeping syringe."""
@@ -1893,10 +2025,15 @@ class MethaneAnnotator(QMainWindow):
     # MASK SAVING
     # =========================================================================
     
-    def _save_mask(self):
-        """Save the current mask."""
+    def _save_mask(self, silent: bool = False):
+        """Save the current mask.
+        
+        Args:
+            silent: If True, skip confirmation dialogs (for auto-save)
+        """
         if not self.session.masks_folder or not self.session.images_folder:
-            QMessageBox.warning(self, "Error", "Please select both images and masks folders first.")
+            if not silent:
+                QMessageBox.warning(self, "Error", "Please select both images and masks folders first.")
             return
         
         if self.canvas.original_image is None:
@@ -1907,6 +2044,22 @@ class MethaneAnnotator(QMainWindow):
             return
         
         image_name = filtered_list[self.session.current_index]
+        mask_path = Path(self.session.masks_folder) / image_name
+        
+        # Check if there's an existing mask and no changes were made
+        if not silent and mask_path.exists() and not self.has_unsaved_changes:
+            reply = QMessageBox.question(
+                self, "No Changes Made",
+                f"No new shapes were drawn for this image.\n\n"
+                f"The existing mask will be overwritten with only syringe regions.\n"
+                f"Gas regions from the previous mask will be LOST.\n\n"
+                f"Do you want to continue?",
+                QMessageBox.Yes | QMessageBox.No
+            )
+            if reply != QMessageBox.Yes:
+                self.statusBar.showMessage("Save cancelled")
+                return
+        
         h, w = self.canvas.original_image.shape[:2]
         
         # Create mask with specified values
@@ -1929,6 +2082,12 @@ class MethaneAnnotator(QMainWindow):
             if len(pts) >= 3:
                 cv2.fillPoly(mask, [pts], 255)
         
+        # Apply eraser shapes (set to 0) - erases gas regions
+        for shape in self.eraser_shapes:
+            pts = shape.to_numpy()
+            if len(pts) >= 3:
+                cv2.fillPoly(mask, [pts], 0)
+        
         # Save mask
         mask_path = Path(self.session.masks_folder) / image_name
         cv2.imwrite(str(mask_path), mask)
@@ -1941,6 +2100,9 @@ class MethaneAnnotator(QMainWindow):
         self._update_navigation_ui(image_name, filtered_list)
         self._load_existing_mask(image_name)  # Update existing mask display
         self._save_session()
+        
+        # Reset change tracking
+        self.has_unsaved_changes = False
         
         self.statusBar.showMessage(f"💾 Saved: {mask_path}")
     
