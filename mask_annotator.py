@@ -1378,8 +1378,8 @@ class MethaneAnnotator(QMainWindow):
         # Cancel
         QShortcut(QKeySequence(Qt.Key_Escape), self, self._cancel_drawing)
         
-        # Clear gas
-        QShortcut(QKeySequence(Qt.Key_Delete), self, self._clear_gas)
+        # Clear drawn gas
+        QShortcut(QKeySequence(Qt.Key_Delete), self, self._clear_drawn_gas)
         
         # Skip/Review
         QShortcut(QKeySequence(Qt.Key_X), self, self._skip_image)
