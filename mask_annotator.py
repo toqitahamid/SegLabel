@@ -1511,6 +1511,7 @@ class MethaneAnnotator(QMainWindow):
             self.existing_mask_info.setText(f"✓ Found: Gas={gas_pixels}px, Syringe={syringe_pixels}px")
             self.existing_mask_info.setStyleSheet("color: #3fb950; font-size: 16px;")
             self.hide_existing_btn.setEnabled(True)
+            self.clear_gas_only_btn.setEnabled(gas_pixels > 0)  # Only if has gas
             self.delete_existing_btn.setEnabled(True)
         else:
             # Check if file exists but overlay is cleared
@@ -1521,16 +1522,19 @@ class MethaneAnnotator(QMainWindow):
                     self.existing_mask_info.setText("Overlay hidden (file exists)")
                     self.existing_mask_info.setStyleSheet("color: #d29922; font-size: 16px;")
                     self.hide_existing_btn.setEnabled(False)  # Already hidden
+                    self.clear_gas_only_btn.setEnabled(True)  # Can still clear gas from file
                     self.delete_existing_btn.setEnabled(True)
                 else:
                     self.existing_mask_info.setText("No saved mask file")
                     self.existing_mask_info.setStyleSheet("color: #8b949e; font-size: 16px;")
                     self.hide_existing_btn.setEnabled(False)
+                    self.clear_gas_only_btn.setEnabled(False)
                     self.delete_existing_btn.setEnabled(False)
             else:
                 self.existing_mask_info.setText("No saved mask file")
                 self.existing_mask_info.setStyleSheet("color: #8b949e; font-size: 16px;")
                 self.hide_existing_btn.setEnabled(False)
+                self.clear_gas_only_btn.setEnabled(False)
                 self.delete_existing_btn.setEnabled(False)
     
     def _clear_existing_mask(self):
@@ -1780,6 +1784,40 @@ class MethaneAnnotator(QMainWindow):
         self.canvas.set_existing_mask(None)
         self._update_existing_mask_ui(False)
         self.statusBar.showMessage("Existing mask overlay hidden (file still exists)")
+    
+    def _clear_gas_from_file(self):
+        """Remove only gas pixels from the saved mask file, keeping syringe."""
+        filtered_list = self._get_filtered_list()
+        if not filtered_list or not self.session.masks_folder:
+            return
+        
+        image_name = filtered_list[self.session.current_index]
+        mask_path = Path(self.session.masks_folder) / image_name
+        
+        if not mask_path.exists():
+            self.statusBar.showMessage("No mask file to modify")
+            return
+        
+        reply = QMessageBox.question(
+            self, "Clear Gas from File",
+            f"Remove gas regions from saved mask file?\n\n"
+            f"File: {image_name}\n\n"
+            "Syringe regions will be kept.",
+            QMessageBox.Yes | QMessageBox.No
+        )
+        
+        if reply == QMessageBox.Yes:
+            # Load existing mask
+            mask = cv2.imread(str(mask_path), cv2.IMREAD_GRAYSCALE)
+            if mask is not None:
+                # Set gas pixels (255) to background (0), keep syringe (100)
+                mask[mask == 255] = 0
+                # Save modified mask
+                cv2.imwrite(str(mask_path), mask)
+                
+                # Reload the mask display
+                self._load_existing_mask(image_name)
+                self.statusBar.showMessage(f"Gas cleared from {image_name} (syringe kept)")
     
     def _delete_existing_mask(self):
         """Delete the existing mask file for current image."""
