@@ -1467,7 +1467,9 @@ class MethaneAnnotator(QMainWindow):
         self.canvas.set_image(image)
         
         # Get the syringe version that applies to this image
-        syringe_shapes = self.session.get_syringe_for_index(self.session.current_index)
+        # Use original index from full image list, not filtered index
+        original_index = self.session.image_list.index(image_name) if image_name in self.session.image_list else 0
+        syringe_shapes = self.session.get_syringe_for_index(original_index)
         self.canvas.set_syringe_shapes(syringe_shapes)
         
         # Clear gas shapes for new image
@@ -1693,17 +1695,19 @@ class MethaneAnnotator(QMainWindow):
     def _on_shape_completed(self, shape: Shape):
         """Handle completed shape from canvas."""
         if self.canvas.is_drawing_syringe:
+            # Get the original index in full image list
+            original_index = self._get_original_index()
+            
             # Get current syringe shapes for this index (if any) and add to them
-            current_index = self.session.current_index
-            current_shapes = list(self.session.get_syringe_for_index(current_index))
+            current_shapes = list(self.session.get_syringe_for_index(original_index))
             current_shapes.append(shape)
             
-            # Create/update syringe version starting from current index
-            self.session.add_syringe_version(current_index, current_shapes)
+            # Create/update syringe version starting from original index
+            self.session.add_syringe_version(original_index, current_shapes)
             self.canvas.set_syringe_shapes(current_shapes)
             self._update_syringe_status()
             self._save_session()
-            self.statusBar.showMessage(f"🔵 Syringe shape added (version from image {current_index + 1})")
+            self.statusBar.showMessage(f"🔵 Syringe shape added (version from image {original_index + 1})")
         else:
             # Add to gas shapes
             self.undo_stack.push(self.gas_shapes)
@@ -1711,10 +1715,19 @@ class MethaneAnnotator(QMainWindow):
             self.canvas.set_gas_shapes(self.gas_shapes)
             self.statusBar.showMessage(f"🟠 Gas shape added (total: {len(self.gas_shapes)})")
     
+    def _get_original_index(self) -> int:
+        """Get the original index in the full image list for the current image."""
+        filtered_list = self._get_filtered_list()
+        if filtered_list and self.session.current_index < len(filtered_list):
+            image_name = filtered_list[self.session.current_index]
+            if image_name in self.session.image_list:
+                return self.session.image_list.index(image_name)
+        return 0
+    
     def _update_syringe_status(self):
         """Update syringe status label."""
-        current_index = self.session.current_index
-        current_shapes = self.session.get_syringe_for_index(current_index)
+        original_index = self._get_original_index()
+        current_shapes = self.session.get_syringe_for_index(original_index)
         
         if current_shapes:
             self.syringe_status_label.setText(f"✓ Active: {len(current_shapes)} shape(s)")
@@ -1729,7 +1742,7 @@ class MethaneAnnotator(QMainWindow):
             # Find which version applies
             applicable_version = None
             for v in self.session.syringe_versions:
-                if v.start_index <= current_index:
+                if v.start_index <= original_index:
                     if applicable_version is None or v.start_index > applicable_version.start_index:
                         applicable_version = v
             
@@ -1745,8 +1758,8 @@ class MethaneAnnotator(QMainWindow):
     
     def _clear_current_syringe(self):
         """Clear the syringe version that applies to the current image."""
-        current_index = self.session.current_index
-        current_shapes = self.session.get_syringe_for_index(current_index)
+        original_index = self._get_original_index()
+        current_shapes = self.session.get_syringe_for_index(original_index)
         
         if not current_shapes:
             self.statusBar.showMessage("No syringe version to clear for this image")
@@ -1754,16 +1767,16 @@ class MethaneAnnotator(QMainWindow):
         
         reply = QMessageBox.question(
             self, "Clear Syringe Version",
-            f"Clear the syringe version that applies to image {current_index + 1}?\n\n"
+            f"Clear the syringe version that applies to image {original_index + 1}?\n\n"
             "This only affects images using this syringe version.\n"
             "Other versions remain unchanged.",
             QMessageBox.Yes | QMessageBox.No
         )
         
         if reply == QMessageBox.Yes:
-            self.session.clear_current_syringe(current_index)
+            self.session.clear_current_syringe(original_index)
             # Reload syringe for current image
-            new_shapes = self.session.get_syringe_for_index(current_index)
+            new_shapes = self.session.get_syringe_for_index(original_index)
             self.canvas.set_syringe_shapes(new_shapes)
             self._update_syringe_status()
             self._save_session()
