@@ -729,10 +729,6 @@ class DrawingCanvas(QLabel):
         if self.original_image is None:
             return
         
-        # #region agent log
-        import json as _json; open(r'd:\data\Methane Ratio\.cursor\debug.log', 'a').write(_json.dumps({"location":"mask_annotator.py:update_display:entry","message":"update_display called","data":{"image_shape":list(self.original_image.shape),"is_grayscale":len(self.original_image.shape)==2},"timestamp":__import__('time').time()*1000,"sessionId":"debug-session","hypothesisId":"A,C"})+'\n')
-        # #endregion
-        
         # Create display image (RGB)
         if len(self.original_image.shape) == 2:
             display = cv2.cvtColor(self.original_image, cv2.COLOR_GRAY2RGB)
@@ -747,33 +743,21 @@ class DrawingCanvas(QLabel):
             
             # Draw existing mask if in verification mode
             if self.existing_mask is not None:
-            # Syringe regions (value 100) - Blue
-            syringe_region = (self.existing_mask == 100)
-            # #region agent log
-            import json as _json; open(r'd:\data\Methane Ratio\.cursor\debug.log', 'a').write(_json.dumps({"location":"mask_annotator.py:update_display:existing_mask_syringe","message":"Coloring existing mask syringe region","data":{"syringe_pixel_count":int(syringe_region.sum()),"color_assigned":"[59, 130, 246] in BGR = B59,G130,R246 = salmon/pink NOT blue"},"timestamp":__import__('time').time()*1000,"sessionId":"debug-session","hypothesisId":"A"})+'\n')
-            # #endregion
-            overlay[syringe_region] = [59, 130, 246]  # Blue
-            
-            # Gas regions (value 255) - Amber/Orange
-            gas_region = (self.existing_mask == 255)
-            # #region agent log
-            import json as _json; open(r'd:\data\Methane Ratio\.cursor\debug.log', 'a').write(_json.dumps({"location":"mask_annotator.py:update_display:existing_mask_gas","message":"Coloring existing mask gas region","data":{"gas_pixel_count":int(gas_region.sum()),"color_assigned":"[245, 158, 11] in BGR = B245,G158,R11 = cyan NOT amber"},"timestamp":__import__('time').time()*1000,"sessionId":"debug-session","hypothesisId":"A"})+'\n')
-            # #endregion
-            overlay[syringe_region] = [245, 158, 11]  # Amber
+                # Syringe regions (value 100) - Blue
+                syringe_region = (self.existing_mask == 100)
+                overlay[syringe_region] = [59, 130, 246]  # Blue
+                
+                # Gas regions (value 255) - Amber/Orange
+                gas_region = (self.existing_mask == 255)
+                overlay[gas_region] = [245, 158, 11]  # Amber
             
             # Draw syringe shapes - Blue
-            # #region agent log
-            import json as _json; open(r'd:\data\Methane Ratio\.cursor\debug.log', 'a').write(_json.dumps({"location":"mask_annotator.py:update_display:draw_syringe","message":"Drawing syringe shapes","data":{"num_syringe_shapes":len(self.syringe_shapes),"color_used_BGR_order":"(59, 130, 246) - comment says Blue but in BGR this is B=59,G=130,R=246 which is SALMON not blue"},"timestamp":__import__('time').time()*1000,"sessionId":"debug-session","hypothesisId":"A"})+'\n')
-            # #endregion
             for shape in self.syringe_shapes:
                 pts = shape.to_numpy()
                 if len(pts) >= 3:
                     cv2.fillPoly(overlay, [pts], (59, 130, 246))
             
             # Draw gas shapes - Amber
-            # #region agent log
-            import json as _json; open(r'd:\data\Methane Ratio\.cursor\debug.log', 'a').write(_json.dumps({"location":"mask_annotator.py:update_display:draw_gas","message":"Drawing gas shapes","data":{"num_gas_shapes":len(self.gas_shapes),"color_used_BGR_order":"(245, 158, 11) - comment says Amber but in BGR this is B=245,G=158,R=11 which is CYAN not amber"},"timestamp":__import__('time').time()*1000,"sessionId":"debug-session","hypothesisId":"A"})+'\n')
-            # #endregion
             for shape in self.gas_shapes:
                 pts = shape.to_numpy()
                 if len(pts) >= 3:
@@ -782,9 +766,6 @@ class DrawingCanvas(QLabel):
                     cv2.rectangle(overlay, tuple(pts[0]), tuple(pts[1]), (245, 158, 11), -1)
             
             # Draw eraser shapes - Dark red/maroon (shows as "erased" areas)
-            # #region agent log
-            import json as _json; open(r'd:\data\Methane Ratio\.cursor\debug.log', 'a').write(_json.dumps({"location":"mask_annotator.py:update_display:draw_eraser","message":"Drawing eraser shapes","data":{"num_eraser_shapes":len(self.eraser_shapes),"color_used_BGR_order":"(80, 40, 40) - in BGR this is B=80,G=40,R=40 which is dark BLUE not dark red"},"timestamp":__import__('time').time()*1000,"sessionId":"debug-session","hypothesisId":"D"})+'\n')
-            # #endregion
             for shape in self.eraser_shapes:
                 pts = shape.to_numpy()
                 if len(pts) >= 3:
@@ -812,10 +793,6 @@ class DrawingCanvas(QLabel):
         # Convert BGR to RGB for Qt
         display_rgb = cv2.cvtColor(display_resized, cv2.COLOR_BGR2RGB)
         
-        # #region agent log
-        import json as _json; open(r'd:\data\Methane Ratio\.cursor\debug.log', 'a').write(_json.dumps({"location":"mask_annotator.py:update_display:create_qimage","message":"Creating QImage from numpy buffer","data":{"display_rgb_shape":list(display_rgb.shape),"note":"QImage uses raw buffer pointer - if numpy array goes out of scope, image may corrupt"},"timestamp":__import__('time').time()*1000,"sessionId":"debug-session","hypothesisId":"B"})+'\n')
-        # #endregion
-        
         qimage = QImage(
             display_rgb.data, new_w, new_h, 
             new_w * 3, QImage.Format_RGB888
@@ -835,12 +812,11 @@ class DrawingCanvas(QLabel):
         painter.setRenderHint(QPainter.Antialiasing)
         
         # Set pen based on what we're drawing
-        # NOTE: QColor uses RGB order (correct), but cv2 uses BGR order (bug source!)
         if self.is_drawing_syringe:
-            pen = QPen(QColor(59, 130, 246, 220), 2)  # QColor(R=59, G=130, B=246) = blue ✓
+            pen = QPen(QColor(59, 130, 246, 220), 2)
             brush = QBrush(QColor(59, 130, 246, 80))
         else:
-            pen = QPen(QColor(245, 158, 11, 220), 2)  # QColor(R=245, G=158, B=11) = amber ✓
+            pen = QPen(QColor(245, 158, 11, 220), 2)
             brush = QBrush(QColor(245, 158, 11, 80))
         
         painter.setPen(pen)
