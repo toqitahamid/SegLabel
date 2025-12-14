@@ -1422,8 +1422,13 @@ class MethaneAnnotator(QMainWindow):
             self._check_for_session()
             self._update_stats()
     
-    def _load_image_list(self):
-        """Load list of images from folder."""
+    def _load_image_list(self, preserve_index: bool = False):
+        """Load list of images from folder.
+        
+        Args:
+            preserve_index: If True, keep current_index (for session restore).
+                           If False, reset to 0 (for new folder selection).
+        """
         if not self.session.images_folder:
             return
         
@@ -1435,7 +1440,13 @@ class MethaneAnnotator(QMainWindow):
             if f.is_file() and f.suffix.lower() in extensions
         ])
         
-        self.session.current_index = 0
+        if not preserve_index:
+            self.session.current_index = 0
+        else:
+            # Clamp the preserved index to valid range
+            max_index = len(self.session.image_list) - 1 if self.session.image_list else 0
+            self.session.current_index = max(0, min(self.session.current_index, max_index))
+        
         self._apply_filter()
         self._load_current_image()
         self._update_stats()
@@ -2016,7 +2027,7 @@ class MethaneAnnotator(QMainWindow):
                 self.masks_path_label.setStyleSheet("color: #7ee787;")
             
             self._update_syringe_status()
-            self._load_image_list()
+            self._load_image_list(preserve_index=True)  # Keep saved position
             
             self.session_status_label.setText("Session: ✓ Loaded")
             self.session_status_label.setStyleSheet("color: #3fb950;")
