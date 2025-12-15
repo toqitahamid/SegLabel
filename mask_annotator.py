@@ -1981,26 +1981,17 @@ class MethaneAnnotator(QMainWindow):
             self.statusBar.showMessage("No mask file to modify")
             return
         
-        reply = QMessageBox.question(
-            self, "Clear Gas from File",
-            f"Remove gas regions from saved mask file?\n\n"
-            f"File: {image_name}\n\n"
-            "Syringe regions will be kept.",
-            QMessageBox.Yes | QMessageBox.No
-        )
-        
-        if reply == QMessageBox.Yes:
-            # Load existing mask
-            mask = cv2.imread(str(mask_path), cv2.IMREAD_GRAYSCALE)
-            if mask is not None:
-                # Set gas pixels (255) to background (0), keep syringe (100)
-                mask[mask == 255] = 0
-                # Save modified mask
-                cv2.imwrite(str(mask_path), mask)
-                
-                # Reload the mask display
-                self._load_existing_mask(image_name)
-                self.statusBar.showMessage(f"Gas cleared from {image_name} (syringe kept)")
+        # Load existing mask and clear gas (no confirmation dialog for speed)
+        mask = cv2.imread(str(mask_path), cv2.IMREAD_GRAYSCALE)
+        if mask is not None:
+            # Set gas pixels (255) to background (0), keep syringe (100)
+            mask[mask == 255] = 0
+            # Save modified mask
+            cv2.imwrite(str(mask_path), mask)
+            
+            # Reload the mask display
+            self._load_existing_mask(image_name)
+            self.statusBar.showMessage(f"Gas cleared from {image_name} (syringe kept)")
     
     def _delete_existing_mask(self):
         """Delete the existing mask file for current image."""
