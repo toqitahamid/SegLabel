@@ -529,13 +529,15 @@ class AnnotationSession:
     
     def to_dict(self) -> dict:
         """Convert session to dictionary for JSON serialization."""
+        from datetime import datetime
         return {
             "images_folder": self.images_folder,
             "masks_folder": self.masks_folder,
             "current_index": self.current_index,
             "syringe_versions": [v.to_dict() for v in self.syringe_versions],
             "skipped_images": list(self.skipped_images),
-            "review_images": list(self.review_images)
+            "review_images": list(self.review_images),
+            "last_saved": datetime.now().isoformat()
         }
     
     @classmethod
@@ -2229,17 +2231,57 @@ class MethaneAnnotator(QMainWindow):
     
     def _check_for_session(self):
         """Check for existing session file and offer to load it."""
+        from datetime import datetime
+        
         session_path = self._get_session_path()
         if session_path is None or not session_path.exists():
             return
         
+        # Read session to get timestamp
+        try:
+            with open(session_path, 'r') as f:
+                data = json.load(f)
+            
+            last_saved = data.get('last_saved', None)
+            if last_saved:
+                try:
+                    saved_time = datetime.fromisoformat(last_saved)
+                    time_str = saved_time.strftime('%Y-%m-%d %H:%M:%S')
+                    # Calculate age
+                    age = datetime.now() - saved_time
+                    if age.days > 0:
+                        age_str = f"{age.days} day(s) ago"
+                    elif age.seconds >= 3600:
+                        age_str = f"{age.seconds // 3600} hour(s) ago"
+                    else:
+                        age_str = f"{age.seconds // 60} minute(s) ago"
+                except:
+                    time_str = "Unknown"
+                    age_str = ""
+            else:
+                time_str = "Unknown (old session format)"
+                age_str = "possibly very old"
+            
+            current_image = data.get('current_index', 0) + 1
+            total_skipped = len(data.get('skipped_images', []))
+            total_review = len(data.get('review_images', []))
+            
+        except:
+            time_str = "Unknown"
+            age_str = ""
+            current_image = 1
+            total_skipped = 0
+            total_review = 0
+        
         reply = QMessageBox.question(
             self, "Existing Session Found",
-            "A previous session was found. Would you like to restore it?\n\n"
-            "This will restore:\n"
-            "• Syringe mask\n"
-            "• Current position\n"
-            "• Skipped/review lists",
+            f"A previous session was found.\n\n"
+            f"📅 Last saved: {time_str}\n"
+            f"⏰ Age: {age_str}\n"
+            f"📍 Position: Image {current_image}\n"
+            f"⏭️ Skipped: {total_skipped}\n"
+            f"🔖 Review: {total_review}\n\n"
+            "Would you like to restore this session?",
             QMessageBox.Yes | QMessageBox.No
         )
         
