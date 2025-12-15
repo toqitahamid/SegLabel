@@ -51,7 +51,7 @@ QWidget {
     background-color: #0a0e14;
     color: #c5cdd9;
     font-family: 'Segoe UI', 'Consolas', monospace;
-    font-size: 18px;
+    font-size: 22px;
 }
 
 /* === FRAMES & PANELS === */
@@ -78,11 +78,11 @@ QGroupBox {
     background-color: #161b22;
     border: 1px solid #30363d;
     border-radius: 8px;
-    margin-top: 20px;
-    padding: 18px;
-    padding-top: 36px;
+    margin-top: 24px;
+    padding: 20px;
+    padding-top: 40px;
     font-weight: bold;
-    font-size: 17px;
+    font-size: 22px;
 }
 
 QGroupBox::title {
@@ -94,7 +94,7 @@ QGroupBox::title {
     border: 1px solid #30363d;
     border-radius: 4px;
     color: #58a6ff;
-    font-size: 16px;
+    font-size: 20px;
     letter-spacing: 1px;
 }
 
@@ -139,11 +139,11 @@ QPushButton {
     background-color: #21262d;
     border: 1px solid #30363d;
     border-radius: 6px;
-    padding: 14px 22px;
+    padding: 16px 26px;
     color: #c9d1d9;
     font-weight: 500;
-    font-size: 17px;
-    min-height: 44px;
+    font-size: 22px;
+    min-height: 52px;
 }
 
 QPushButton:hover {
@@ -167,7 +167,7 @@ QPushButton#primaryBtn {
     border: 1px solid #2ea043;
     color: white;
     font-weight: bold;
-    font-size: 18px;
+    font-size: 24px;
 }
 
 QPushButton#primaryBtn:hover {
@@ -204,10 +204,10 @@ QPushButton#syringeBtn:checked {
 QPushButton#navBtn {
     background-color: #21262d;
     border: 1px solid #30363d;
-    padding: 16px 28px;
-    font-size: 20px;
+    padding: 18px 32px;
+    font-size: 26px;
     font-weight: bold;
-    min-height: 50px;
+    min-height: 58px;
 }
 
 QPushButton#navBtn:hover {
@@ -217,9 +217,9 @@ QPushButton#navBtn:hover {
 
 /* === RADIO BUTTONS === */
 QRadioButton {
-    spacing: 14px;
-    padding: 10px 6px;
-    font-size: 17px;
+    spacing: 16px;
+    padding: 12px 8px;
+    font-size: 22px;
 }
 
 QRadioButton::indicator {
@@ -246,9 +246,9 @@ QRadioButton:checked {
 
 /* === CHECKBOXES === */
 QCheckBox {
-    spacing: 14px;
-    padding: 10px;
-    font-size: 16px;
+    spacing: 16px;
+    padding: 12px;
+    font-size: 22px;
 }
 
 QCheckBox::indicator {
@@ -298,9 +298,9 @@ QComboBox {
     background-color: #21262d;
     border: 1px solid #30363d;
     border-radius: 4px;
-    padding: 10px 16px;
-    min-width: 160px;
-    font-size: 16px;
+    padding: 12px 18px;
+    min-width: 180px;
+    font-size: 22px;
     color: #c9d1d9;
 }
 
@@ -332,7 +332,7 @@ QLabel {
 }
 
 QLabel#titleLabel {
-    font-size: 28px;
+    font-size: 34px;
     font-weight: bold;
     color: #58a6ff;
     letter-spacing: 2px;
@@ -341,8 +341,8 @@ QLabel#titleLabel {
 QLabel#pathLabel {
     color: #7ee787;
     font-family: 'Consolas', monospace;
-    font-size: 18px;
-    padding: 6px 10px;
+    font-size: 22px;
+    padding: 8px 12px;
     background-color: rgba(46, 160, 67, 0.1);
     border-radius: 3px;
 }
@@ -363,31 +363,31 @@ QLabel#statusBad {
 }
 
 QLabel#imageNameLabel {
-    font-size: 20px;
+    font-size: 26px;
     font-weight: bold;
     color: #c9d1d9;
-    padding: 6px 14px;
+    padding: 8px 16px;
     background-color: #21262d;
     border-radius: 4px;
 }
 
 QLabel#counterLabel {
-    font-size: 18px;
+    font-size: 24px;
     color: #8b949e;
     font-family: 'Consolas', monospace;
 }
 
 QLabel#statsLabel {
-    font-size: 16px;
+    font-size: 22px;
     color: #8b949e;
-    padding: 6px 10px;
+    padding: 8px 12px;
     background-color: #161b22;
     border-radius: 4px;
 }
 
 QLabel#coordLabel {
     font-family: 'Consolas', monospace;
-    font-size: 16px;
+    font-size: 22px;
     color: #58a6ff;
 }
 
@@ -396,14 +396,14 @@ QStatusBar {
     background-color: #161b22;
     border-top: 1px solid #21262d;
     color: #8b949e;
-    font-size: 16px;
-    min-height: 36px;
+    font-size: 22px;
+    min-height: 44px;
 }
 
 QStatusBar QLabel {
-    padding: 8px 16px;
-    margin: 0 6px;
-    font-size: 16px;
+    padding: 10px 18px;
+    margin: 0 8px;
+    font-size: 22px;
 }
 
 /* === SCROLL AREA === */
@@ -435,6 +435,7 @@ QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
 /* === SPLITTER === */
 QSplitter::handle {
     background-color: #21262d;
+    width: 8px;
 }
 
 QSplitter::handle:hover {
@@ -1109,12 +1110,12 @@ class MethaneAnnotator(QMainWindow):
         self.canvas.mouse_moved.connect(self._on_mouse_moved)
         content_splitter.addWidget(self.canvas)
         
-        # Tools panel with scroll area
+        # Tools panel with scroll area - resizable via splitter
         tools_scroll = QScrollArea()
         tools_scroll.setWidgetResizable(True)
         tools_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        tools_scroll.setMinimumWidth(450)
-        tools_scroll.setMaximumWidth(550)
+        tools_scroll.setMinimumWidth(350)  # Minimum width when dragged smaller
+        # No maximum width - allows dragging to expand
         
         tools_widget = QWidget()
         tools_layout = QVBoxLayout(tools_widget)
@@ -1333,7 +1334,15 @@ class MethaneAnnotator(QMainWindow):
             ("S", "Save mask"),
             ("Ctrl+S", "Save & Next"),
             ("1/2/3/4", "Poly/Free/Rect/Eraser"),
+            ("T", "Toggle syringe mode"),
             ("Ctrl+Z/Y", "Undo/Redo"),
+            ("C", "Clear drawn gas"),
+            ("E", "Clear eraser"),
+            ("Shift+Del", "Clear syringe"),
+            ("V", "Toggle saved mask"),
+            ("Ctrl+Del", "Clear gas from file"),
+            ("Ctrl+Shift+Del", "Delete mask file"),
+            ("+/-", "Opacity up/down"),
             ("X", "Skip image"),
             ("R", "Mark for review"),
             ("Space", "Toggle overlay"),
@@ -1346,15 +1355,15 @@ class MethaneAnnotator(QMainWindow):
             key_label.setStyleSheet("""
                 background-color: #21262d; 
                 color: #58a6ff; 
-                padding: 6px 10px; 
+                padding: 8px 12px; 
                 border-radius: 4px;
                 font-family: 'Consolas', monospace;
-                font-size: 15px;
-                min-width: 100px;
+                font-size: 20px;
+                min-width: 120px;
             """)
             row.addWidget(key_label)
             action_label = QLabel(action)
-            action_label.setStyleSheet("color: #8b949e; font-size: 15px;")
+            action_label.setStyleSheet("color: #8b949e; font-size: 20px;")
             row.addWidget(action_label)
             row.addStretch()
             shortcuts_layout.addLayout(row)
@@ -1412,7 +1421,7 @@ class MethaneAnnotator(QMainWindow):
         QShortcut(QKeySequence(Qt.Key_Escape), self, self._cancel_drawing)
         
         # Clear drawn gas
-        QShortcut(QKeySequence(Qt.Key_Delete), self, self._clear_drawn_gas)
+        QShortcut(QKeySequence(Qt.Key_C), self, self._clear_drawn_gas)
         
         # Skip/Review
         QShortcut(QKeySequence(Qt.Key_X), self, self._skip_image)
@@ -1420,6 +1429,46 @@ class MethaneAnnotator(QMainWindow):
         
         # Toggle overlay
         QShortcut(QKeySequence(Qt.Key_Space), self, self._toggle_overlay)
+        
+        # === NEW SHORTCUTS ===
+        
+        # Toggle syringe mode
+        QShortcut(QKeySequence(Qt.Key_T), self, self._toggle_syringe_shortcut)
+        
+        # Clear current syringe version
+        QShortcut(QKeySequence("Shift+Delete"), self, self._clear_current_syringe)
+        
+        # Clear eraser shapes
+        QShortcut(QKeySequence(Qt.Key_E), self, self._clear_eraser)
+        
+        # Toggle existing mask overlay
+        QShortcut(QKeySequence(Qt.Key_V), self, self._toggle_existing_overlay)
+        
+        # Clear gas from saved file (keep syringe)
+        QShortcut(QKeySequence("Ctrl+Delete"), self, self._clear_gas_from_file)
+        
+        # Delete entire mask file
+        QShortcut(QKeySequence("Ctrl+Shift+Delete"), self, self._delete_existing_mask)
+        
+        # Opacity controls
+        QShortcut(QKeySequence(Qt.Key_Plus), self, self._increase_opacity)
+        QShortcut(QKeySequence(Qt.Key_Equal), self, self._increase_opacity)  # For keyboards without numpad
+        QShortcut(QKeySequence(Qt.Key_Minus), self, self._decrease_opacity)
+    
+    def _toggle_syringe_shortcut(self):
+        """Toggle syringe mode via keyboard shortcut."""
+        self.draw_syringe_btn.setChecked(not self.draw_syringe_btn.isChecked())
+        self._toggle_syringe_mode()
+    
+    def _increase_opacity(self):
+        """Increase overlay opacity by 10%."""
+        current = self.opacity_slider.value()
+        self.opacity_slider.setValue(min(100, current + 10))
+    
+    def _decrease_opacity(self):
+        """Decrease overlay opacity by 10%."""
+        current = self.opacity_slider.value()
+        self.opacity_slider.setValue(max(0, current - 10))
     
     # =========================================================================
     # FOLDER MANAGEMENT
