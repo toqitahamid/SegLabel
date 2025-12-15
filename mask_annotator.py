@@ -2024,22 +2024,19 @@ class MethaneAnnotator(QMainWindow):
         
         # Check if there's an existing mask and no changes were made
         if not silent and mask_path.exists() and not self.has_unsaved_changes:
-            reply = QMessageBox.question(
-                self, "No Changes Made",
-                f"No new shapes were drawn for this image.\n\n"
-                f"The existing mask will be overwritten with only syringe regions.\n"
-                f"Gas regions from the previous mask will be LOST.\n\n"
-                f"Do you want to continue?",
-                QMessageBox.Yes | QMessageBox.No
-            )
-            if reply != QMessageBox.Yes:
-                self.statusBar.showMessage("Save cancelled")
-                return
+            # No changes made - just inform user, no need to resave
+            self.statusBar.showMessage("No changes to save")
+            return
         
         h, w = self.canvas.original_image.shape[:2]
         
-        # Create mask with specified values
-        mask = np.zeros((h, w), dtype=np.uint8)
+        # Start with existing mask if it exists (to preserve existing gas regions)
+        if mask_path.exists():
+            mask = cv2.imread(str(mask_path), cv2.IMREAD_GRAYSCALE)
+            if mask is None or mask.shape != (h, w):
+                mask = np.zeros((h, w), dtype=np.uint8)
+        else:
+            mask = np.zeros((h, w), dtype=np.uint8)
         
         # Get syringe shapes for this image's index
         # We need to find the original index in the full image list
@@ -2047,18 +2044,24 @@ class MethaneAnnotator(QMainWindow):
         syringe_shapes = self.session.get_syringe_for_index(original_index)
         
         # Draw syringe regions (value 100)
-        for shape in syringe_shapes:
-            pts = shape.to_numpy()
-            if len(pts) >= 3:
-                cv2.fillPoly(mask, [pts], 100)
+        # Only clear and redraw syringe if we have syringe shapes in the session
+        # This preserves existing syringe masks from previous sessions or external sources
+        if syringe_shapes:
+            # Clear existing syringe regions and redraw from session shapes
+            mask[mask == 100] = 0
+            for shape in syringe_shapes:
+                pts = shape.to_numpy()
+                if len(pts) >= 3:
+                    cv2.fillPoly(mask, [pts], 100)
+        # If no syringe_shapes, preserve existing syringe pixels in the mask file
         
-        # Draw gas regions (value 255) - overwrites syringe if overlap
+        # Add NEW gas regions (value 255) on top of existing ones
         for shape in self.gas_shapes:
             pts = shape.to_numpy()
             if len(pts) >= 3:
                 cv2.fillPoly(mask, [pts], 255)
         
-        # Apply eraser shapes (set to 0) - erases gas regions
+        # Apply eraser shapes (set to 0) - erases gas regions (existing + new)
         for shape in self.eraser_shapes:
             pts = shape.to_numpy()
             if len(pts) >= 3:
