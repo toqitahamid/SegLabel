@@ -1342,7 +1342,7 @@ class MethaneAnnotator(QMainWindow):
             ("E", "Clear eraser"),
             ("Shift+Del", "Clear syringe"),
             ("V", "Toggle saved mask"),
-            ("Ctrl+Del", "Clear gas from file"),
+            ("Q", "Clear gas from file"),
             ("Ctrl+Shift+Del", "Delete mask file"),
             ("+/-", "Opacity up/down"),
             ("X", "Skip image"),
@@ -1446,8 +1446,8 @@ class MethaneAnnotator(QMainWindow):
         # Toggle existing mask overlay
         QShortcut(QKeySequence(Qt.Key_V), self, self._toggle_existing_overlay)
         
-        # Clear gas from saved file (keep syringe)
-        QShortcut(QKeySequence("Ctrl+Delete"), self, self._clear_gas_from_file)
+        # Clear gas from saved file (keep syringe) - Q is easier than Ctrl+Delete
+        QShortcut(QKeySequence(Qt.Key_Q), self, self._clear_gas_from_file)
         
         # Delete entire mask file
         QShortcut(QKeySequence("Ctrl+Shift+Delete"), self, self._delete_existing_mask)
