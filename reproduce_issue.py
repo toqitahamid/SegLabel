@@ -25,8 +25,8 @@ class TestSyringeMode(unittest.TestCase):
         self.window.syringe_polygon_radio.click()
         
         # Check if mode changed
-        self.assertFalse(self.window.canvas.is_drawing_syringe, 
-                        "Selecting Syringe Polygon tool should NOT automatically enable draw mode (based on current code reading)")
+        self.assertTrue(self.window.canvas.is_drawing_syringe, 
+                        "Selecting Syringe Polygon tool SHOULD automatically enable draw mode now")
         
         # Check status bar message (which might be misleading)
         status_msg = self.window.statusBar.currentMessage()

@@ -1053,6 +1053,13 @@ class MethaneAnnotator(QMainWindow):
     def _on_syringe_tool_changed(self, button):
         """Handle syringe tool selection change."""
         self._apply_syringe_tool()
+        
+        # Auto-enable syringe mode if not already active
+        if not self.draw_syringe_btn.isChecked() and not self.extend_syringe_btn.isChecked():
+            # Default to "Draw New Syringe" mode
+            self.draw_syringe_btn.setChecked(True)
+            self._toggle_syringe_mode()
+            
         tool_name = self._get_syringe_tool_name()
         self.statusBar.showMessage(f"🔵 Syringe tool: {tool_name}")
 
@@ -1078,6 +1085,13 @@ class MethaneAnnotator(QMainWindow):
     def _on_tool_changed(self, button):
         """Handle tool selection change."""
         self.is_eraser_mode = False
+
+        # If drawing syringe, switch back to gas mode automatically
+        if self.draw_syringe_btn.isChecked() or self.extend_syringe_btn.isChecked():
+            self.draw_syringe_btn.setChecked(False)
+            self.extend_syringe_btn.setChecked(False)
+            self.canvas.set_drawing_mode(False)
+            self.statusBar.showMessage("🟠 GAS MODE: Switched to gas tools")
 
         if button == self.polygon_radio:
             self.canvas.set_tool('polygon')
