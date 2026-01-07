@@ -1158,9 +1158,10 @@ class MethaneAnnotator(QMainWindow):
             # Auto-save to mask file immediately
             self.has_unsaved_changes = True
             self._save_mask(silent=True)
-            
-            # Show clear feedback
-            self.statusBar.showMessage(f"✅ Syringe shape added and saved! ({len(current_shapes)} total shapes)")
+
+            # Propagate syringe to all subsequent images that use this version
+            # The propagation method will set the appropriate status message
+            self._propagate_syringe_to_subsequent_images(original_index)
         else:
             if self.is_eraser_mode:
                 # Push current state to eraser undo stack before modifying
@@ -1217,6 +1218,79 @@ class MethaneAnnotator(QMainWindow):
                 self.syringe_version_label.setText(f"No version applies ({total_versions} defined)")
         else:
             self.syringe_version_label.setText("No versions defined yet")
+
+    def _propagate_syringe_to_subsequent_images(self, from_index: int):
+        """Propagate syringe mask changes to all subsequent images that use this version.
+
+        When a new syringe version is created/extended at from_index, this updates
+        the mask files for all images from from_index onwards that should use this version.
+
+        Args:
+            from_index: The original image index where the syringe was modified.
+        """
+        if not self.session.masks_folder or not self.session.images_folder:
+            return
+
+        syringe_shapes = self.session.get_syringe_for_index(from_index)
+        if not syringe_shapes:
+            return
+
+        # Find the next syringe version's start_index (if any)
+        # We only propagate up to (but not including) the next version's start
+        next_version_start = None
+        for version in self.session.syringe_versions:
+            if version.start_index > from_index:
+                if next_version_start is None or version.start_index < next_version_start:
+                    next_version_start = version.start_index
+
+        # Determine the range of images to update
+        end_index = next_version_start if next_version_start else len(self.session.image_list)
+
+        updated_count = 0
+        for idx in range(from_index, end_index):
+            if idx >= len(self.session.image_list):
+                break
+
+            image_name = self.session.image_list[idx]
+            mask_path = Path(self.session.masks_folder) / image_name
+
+            # Get original image dimensions
+            image_path = Path(self.session.images_folder) / image_name
+            if not image_path.exists():
+                continue
+
+            img = cv2.imread(str(image_path))
+            if img is None:
+                continue
+            h, w = img.shape[:2]
+
+            # Load existing mask or create new
+            if mask_path.exists():
+                mask = cv2.imread(str(mask_path), cv2.IMREAD_GRAYSCALE)
+                if mask is None or mask.shape != (h, w):
+                    mask = np.zeros((h, w), dtype=np.uint8)
+            else:
+                mask = np.zeros((h, w), dtype=np.uint8)
+
+            # Clear old syringe and draw new syringe shapes
+            mask[mask == 100] = 0
+            for shape in syringe_shapes:
+                pts = shape.to_numpy()
+                if len(pts) >= 3:
+                    cv2.fillPoly(mask, [pts], 100)
+
+            # Save updated mask
+            cv2.imwrite(str(mask_path), mask)
+            updated_count += 1
+
+        if updated_count > 1:
+            self.statusBar.showMessage(
+                f"✅ Syringe updated for {updated_count} images (from image {from_index + 1} to {from_index + updated_count})"
+            )
+        elif updated_count == 1:
+            self.statusBar.showMessage(
+                f"✅ Syringe shape saved for image {from_index + 1}"
+            )
 
     def _clear_current_syringe(self):
         """Clear the syringe version that applies to the current image."""
