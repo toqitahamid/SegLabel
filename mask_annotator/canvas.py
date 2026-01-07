@@ -198,31 +198,31 @@ class DrawingCanvas(QLabel):
             if self.existing_mask is not None:
                 # Syringe regions (value 100) - Blue
                 syringe_region = (self.existing_mask == 100)
-                overlay[syringe_region] = [59, 130, 246]  # Blue
+                overlay[syringe_region] = [246, 130, 59]  # Blue (BGR)
 
                 # Gas regions (value 255) - Amber/Orange
                 gas_region = (self.existing_mask == 255)
-                overlay[gas_region] = [245, 158, 11]  # Amber
+                overlay[gas_region] = [11, 158, 245]  # Amber (BGR)
 
             # Draw syringe shapes - Blue
             for shape in self.syringe_shapes:
                 pts = shape.to_numpy()
                 if len(pts) >= 3:
-                    cv2.fillPoly(overlay, [pts], (59, 130, 246))
+                    cv2.fillPoly(overlay, [pts], (246, 130, 59))
 
             # Draw gas shapes - Amber
             for shape in self.gas_shapes:
                 pts = shape.to_numpy()
                 if len(pts) >= 3:
-                    cv2.fillPoly(overlay, [pts], (245, 158, 11))
+                    cv2.fillPoly(overlay, [pts], (11, 158, 245))
                 elif shape.shape_type == 'rectangle' and len(pts) == 2:
-                    cv2.rectangle(overlay, tuple(pts[0]), tuple(pts[1]), (245, 158, 11), -1)
+                    cv2.rectangle(overlay, tuple(pts[0]), tuple(pts[1]), (11, 158, 245), -1)
 
             # Draw eraser shapes - Dark red/maroon (shows as "erased" areas)
             for shape in self.eraser_shapes:
                 pts = shape.to_numpy()
                 if len(pts) >= 3:
-                    cv2.fillPoly(overlay, [pts], (80, 40, 40))  # Dark color to show erasure
+                    cv2.fillPoly(overlay, [pts], (40, 40, 80))  # Dark color to show erasure
 
             # Blend overlay
             alpha = self.overlay_opacity
