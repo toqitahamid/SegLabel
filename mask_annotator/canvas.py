@@ -278,6 +278,7 @@ class DrawingCanvas(QLabel):
 
         # Draw current polygon/freehand points
         if self.current_tool in ('polygon', 'freehand') and len(self.current_points) > 0:
+            print(f"[DEBUG] paintEvent: Drawing {len(self.current_points)} points, tool={self.current_tool}, syringe={self.is_drawing_syringe}")
             polygon = QPolygon([self.image_to_widget_coords(x, y) for x, y in self.current_points])
 
             if len(self.current_points) >= 3:
@@ -307,12 +308,13 @@ class DrawingCanvas(QLabel):
     def mousePressEvent(self, event):
         """Handle mouse press for drawing and panning."""
         self.setFocus()  # Ensure we have focus for key events
-        
+
         if self.original_image is None:
+            print(f"[DEBUG] mousePressEvent: No image loaded")
             return
 
         pos = event.pos()
-        
+
         # Panning logic (Space + Left Click OR Middle Click)
         if (self.is_space_pressed and event.button() == Qt.LeftButton) or event.button() == Qt.MiddleButton:
             self.is_panning = True
@@ -324,7 +326,10 @@ class DrawingCanvas(QLabel):
         img_x, img_y = self.widget_to_image_coords(pos)
 
         if not self.is_valid_image_coord(img_x, img_y):
+            print(f"[DEBUG] mousePressEvent: Invalid coords ({img_x}, {img_y}), image size: {self.original_image.shape[:2]}")
             return
+
+        print(f"[DEBUG] mousePressEvent: tool={self.current_tool}, syringe_mode={self.is_drawing_syringe}, coords=({img_x}, {img_y})")
 
         if event.button() == Qt.LeftButton:
             if self.current_tool == 'polygon':

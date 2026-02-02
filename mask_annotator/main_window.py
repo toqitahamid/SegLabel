@@ -759,13 +759,21 @@ class MethaneAnnotator(QMainWindow):
         # Load existing mask if exists and verification mode is on
         self._load_existing_mask(image_name)
 
+        # Check if syringe in session differs from syringe in file - if so, auto-save
+        self._sync_syringe_to_file_if_needed(image_name, original_index)
+
         # Update UI
         self._update_navigation_ui(image_name, filtered_list)
         self._update_syringe_status()
         self._save_session()
 
     def _load_existing_mask(self, image_name: str):
-        """Load existing mask for verification mode."""
+        """Load existing mask for verification mode.
+        
+        Note: Mask is always loaded so syringe (pixel 100) is visible.
+        The checkbox controls whether this function is called, but doesn't
+        affect the mask loading itself.
+        """
         if not self.session.masks_folder:
             self.canvas.set_existing_mask(None)
             self._update_existing_mask_ui(False)
@@ -775,10 +783,8 @@ class MethaneAnnotator(QMainWindow):
 
         if mask_path.exists():
             mask = cv2.imread(str(mask_path), cv2.IMREAD_GRAYSCALE)
-            if self.show_existing_cb.isChecked():
-                self.canvas.set_existing_mask(mask)
-            else:
-                self.canvas.set_existing_mask(None)
+            # Always set the mask so syringe (100) is always visible
+            self.canvas.set_existing_mask(mask)
             self._update_existing_mask_ui(True, mask)
         else:
             self.canvas.set_existing_mask(None)
@@ -1044,6 +1050,8 @@ class MethaneAnnotator(QMainWindow):
         self.canvas.set_drawing_mode(is_extending)
         self._apply_syringe_tool()
 
+        print(f"[DEBUG] _toggle_extend_syringe_mode: is_extending={is_extending}, canvas.is_drawing_syringe={self.canvas.is_drawing_syringe}, canvas.current_tool={self.canvas.current_tool}")
+
         if is_extending:
             tool_name = self._get_syringe_tool_name()
             self.statusBar.showMessage(f"🔵 EXTEND SYRINGE: Draw {tool_name} to add new area to existing mask")
@@ -1155,13 +1163,11 @@ class MethaneAnnotator(QMainWindow):
             self.extend_syringe_btn.setChecked(False)
             self.canvas.set_drawing_mode(False)
             
-            # Auto-save to mask file immediately
+            # Auto-save to mask file immediately (only current image)
             self.has_unsaved_changes = True
             self._save_mask(silent=True)
 
-            # Propagate syringe to all subsequent images that use this version
-            # The propagation method will set the appropriate status message
-            self._propagate_syringe_to_subsequent_images(original_index)
+            self.statusBar.showMessage(f"✅ Syringe shape saved! Will apply to subsequent images when visited.")
         else:
             if self.is_eraser_mode:
                 # Push current state to eraser undo stack before modifying
@@ -1219,78 +1225,64 @@ class MethaneAnnotator(QMainWindow):
         else:
             self.syringe_version_label.setText("No versions defined yet")
 
-    def _propagate_syringe_to_subsequent_images(self, from_index: int):
-        """Propagate syringe mask changes to all subsequent images that use this version.
+    def _sync_syringe_to_file_if_needed(self, image_name: str, original_index: int):
+        """Sync syringe from session to mask file if they differ.
 
-        When a new syringe version is created/extended at from_index, this updates
-        the mask files for all images from from_index onwards that should use this version.
+        Called when visiting an image to ensure the mask file has the correct
+        syringe version from the session.
+        
+        NOTE: Only syncs if session has syringe shapes. If session is empty,
+        the file is NOT modified (preserves existing syringe in file).
 
         Args:
-            from_index: The original image index where the syringe was modified.
+            image_name: Name of the current image file.
+            original_index: The image's index in the full image list.
         """
         if not self.session.masks_folder or not self.session.images_folder:
             return
 
-        syringe_shapes = self.session.get_syringe_for_index(from_index)
+        syringe_shapes = self.session.get_syringe_for_index(original_index)
+        
+        # CRITICAL: Don't modify file if session has no syringe shapes
+        # This preserves syringe that was saved directly to file (not via session)
         if not syringe_shapes:
             return
+        mask_path = Path(self.session.masks_folder) / image_name
 
-        # Find the next syringe version's start_index (if any)
-        # We only propagate up to (but not including) the next version's start
-        next_version_start = None
-        for version in self.session.syringe_versions:
-            if version.start_index > from_index:
-                if next_version_start is None or version.start_index < next_version_start:
-                    next_version_start = version.start_index
+        # Get image dimensions
+        if self.canvas.original_image is None:
+            return
+        h, w = self.canvas.original_image.shape[:2]
 
-        # Determine the range of images to update
-        end_index = next_version_start if next_version_start else len(self.session.image_list)
+        # Load existing mask to check current syringe
+        if mask_path.exists():
+            existing_mask = cv2.imread(str(mask_path), cv2.IMREAD_GRAYSCALE)
+            if existing_mask is None or existing_mask.shape != (h, w):
+                existing_mask = np.zeros((h, w), dtype=np.uint8)
+        else:
+            existing_mask = np.zeros((h, w), dtype=np.uint8)
 
-        updated_count = 0
-        for idx in range(from_index, end_index):
-            if idx >= len(self.session.image_list):
-                break
+        # Render expected syringe mask from session
+        expected_syringe = np.zeros((h, w), dtype=np.uint8)
+        for shape in syringe_shapes:
+            pts = shape.to_numpy()
+            if len(pts) >= 3:
+                cv2.fillPoly(expected_syringe, [pts], 100)
 
-            image_name = self.session.image_list[idx]
-            mask_path = Path(self.session.masks_folder) / image_name
+        # Extract current syringe from file
+        current_syringe = np.zeros((h, w), dtype=np.uint8)
+        current_syringe[existing_mask == 100] = 100
 
-            # Get original image dimensions
-            image_path = Path(self.session.images_folder) / image_name
-            if not image_path.exists():
-                continue
+        # Compare - if different, update the file
+        if not np.array_equal(current_syringe, expected_syringe):
+            # Update mask: keep gas regions, replace syringe
+            new_mask = existing_mask.copy()
+            new_mask[new_mask == 100] = 0  # Clear old syringe
+            new_mask[expected_syringe == 100] = 100  # Add new syringe
 
-            img = cv2.imread(str(image_path))
-            if img is None:
-                continue
-            h, w = img.shape[:2]
-
-            # Load existing mask or create new
-            if mask_path.exists():
-                mask = cv2.imread(str(mask_path), cv2.IMREAD_GRAYSCALE)
-                if mask is None or mask.shape != (h, w):
-                    mask = np.zeros((h, w), dtype=np.uint8)
-            else:
-                mask = np.zeros((h, w), dtype=np.uint8)
-
-            # Clear old syringe and draw new syringe shapes
-            mask[mask == 100] = 0
-            for shape in syringe_shapes:
-                pts = shape.to_numpy()
-                if len(pts) >= 3:
-                    cv2.fillPoly(mask, [pts], 100)
-
-            # Save updated mask
-            cv2.imwrite(str(mask_path), mask)
-            updated_count += 1
-
-        if updated_count > 1:
-            self.statusBar.showMessage(
-                f"✅ Syringe updated for {updated_count} images (from image {from_index + 1} to {from_index + updated_count})"
-            )
-        elif updated_count == 1:
-            self.statusBar.showMessage(
-                f"✅ Syringe shape saved for image {from_index + 1}"
-            )
+            cv2.imwrite(str(mask_path), new_mask)
+            self._load_existing_mask(image_name)  # Reload display
+            self.statusBar.showMessage(f"✅ Syringe mask updated for {image_name}")
 
     def _clear_current_syringe(self):
         """Clear the syringe version that applies to the current image."""
