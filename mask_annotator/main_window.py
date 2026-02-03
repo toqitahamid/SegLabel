@@ -1285,11 +1285,28 @@ class MethaneAnnotator(QMainWindow):
             self.statusBar.showMessage(f"✅ Syringe mask updated for {image_name}")
 
     def _clear_current_syringe(self):
-        """Clear the syringe version that applies to the current image."""
+        """Clear the syringe version that applies to the current image.
+
+        Checks both session and mask file for syringe presence.
+        If syringe exists in either location, allows clearing.
+        """
         original_index = self._get_original_index()
         current_shapes = self.session.get_syringe_for_index(original_index)
 
-        if not current_shapes:
+        # Also check if there's a syringe in the saved mask file
+        has_syringe_in_file = False
+        filtered_list = self._get_filtered_list()
+        image_name = None
+
+        if self.session.masks_folder and filtered_list and self.session.current_index < len(filtered_list):
+            image_name = filtered_list[self.session.current_index]
+            mask_path = Path(self.session.masks_folder) / image_name
+            if mask_path.exists():
+                mask = cv2.imread(str(mask_path), cv2.IMREAD_GRAYSCALE)
+                if mask is not None and np.any(mask == 100):
+                    has_syringe_in_file = True
+
+        if not current_shapes and not has_syringe_in_file:
             self.statusBar.showMessage("No syringe version to clear for this image")
             return
 
@@ -1302,12 +1319,28 @@ class MethaneAnnotator(QMainWindow):
         )
 
         if reply == QMessageBox.Yes:
-            self.session.clear_current_syringe(original_index)
+            # Clear from session if present
+            if current_shapes:
+                self.session.clear_current_syringe(original_index)
+
             # Reload syringe for current image
             new_shapes = self.session.get_syringe_for_index(original_index)
             self.canvas.set_syringe_shapes(new_shapes)
             self._update_syringe_status()
             self._save_session()
+
+            # Also clear syringe from the mask file on disk
+            if image_name and self.session.masks_folder:
+                mask_path = Path(self.session.masks_folder) / image_name
+                if mask_path.exists():
+                    mask = cv2.imread(str(mask_path), cv2.IMREAD_GRAYSCALE)
+                    if mask is not None:
+                        # Clear syringe pixels (value 100) from the mask
+                        mask[mask == 100] = 0
+                        cv2.imwrite(str(mask_path), mask)
+                        # Reload the existing mask display
+                        self._load_existing_mask(image_name)
+
             self.statusBar.showMessage("Syringe version cleared")
 
     def _clear_drawn_gas(self):
