@@ -17,7 +17,7 @@ class UndoStack:
 
     def push(self, shapes: List[Shape]):
         """Save current state before modification."""
-        self.undo_stack.append([Shape(s.shape_type, list(s.points)) for s in shapes])
+        self.undo_stack.append([Shape(s.shape_type, list(s.points), s.radius) for s in shapes])
         if len(self.undo_stack) > self.max_size:
             self.undo_stack.pop(0)
         self.redo_stack.clear()
@@ -26,14 +26,14 @@ class UndoStack:
         """Undo last action, return previous state."""
         if not self.undo_stack:
             return None
-        self.redo_stack.append([Shape(s.shape_type, list(s.points)) for s in current_shapes])
+        self.redo_stack.append([Shape(s.shape_type, list(s.points), s.radius) for s in current_shapes])
         return self.undo_stack.pop()
 
     def redo(self, current_shapes: List[Shape]) -> Optional[List[Shape]]:
         """Redo last undone action."""
         if not self.redo_stack:
             return None
-        self.undo_stack.append([Shape(s.shape_type, list(s.points)) for s in current_shapes])
+        self.undo_stack.append([Shape(s.shape_type, list(s.points), s.radius) for s in current_shapes])
         return self.redo_stack.pop()
 
     def clear(self):

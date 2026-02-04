@@ -84,7 +84,8 @@ Session state persists to JSON automatically. Includes backward compatibility wi
 
 ## Key Keyboard Shortcuts
 
-- **Drawing**: 1 (polygon), 2 (freehand), 3 (rectangle), 4 (eraser)
+- **Drawing**: 1 (polygon), 2 (freehand), 3 (rectangle), 4 (eraser), 5 (brush eraser)
+- **Brush Size**: [ (decrease), ] (increase)
 - **Navigation**: Right/D (next), Left/A (prev)
 - **Save**: S (save), Ctrl+S (save & next)
 - **Syringe**: T (toggle mode), Shift+T (extend mode)

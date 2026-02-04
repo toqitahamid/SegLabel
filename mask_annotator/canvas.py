@@ -21,6 +21,7 @@ class DrawingCanvas(QLabel):
     shape_completed = pyqtSignal(Shape)
     mouse_moved = pyqtSignal(int, int)
     zoom_changed = pyqtSignal(float)  # Emits current zoom level
+    brush_radius_changed = pyqtSignal(int)  # Emits current brush radius
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -49,11 +50,18 @@ class DrawingCanvas(QLabel):
         self.setFocusPolicy(Qt.StrongFocus)
 
         # Drawing state
-        self.current_tool = "polygon"  # polygon, freehand, rectangle
+        self.current_tool = "polygon"  # polygon, freehand, rectangle, brush
         self.is_drawing_syringe = False
         self.current_points: List[Tuple[int, int]] = []
         self.is_drawing = False
         self.start_point: Optional[Tuple[int, int]] = None
+
+        # Brush eraser state
+        self.brush_radius = 20  # Default brush radius in pixels
+        self.min_brush_radius = 5
+        self.max_brush_radius = 100
+        self.is_brush_eraser = False  # Whether brush eraser mode is active
+        self.brush_preview_pos: Optional[Tuple[int, int]] = None  # For cursor preview
 
         # Shapes
         self.syringe_shapes: List[Shape] = []
@@ -116,6 +124,26 @@ class DrawingCanvas(QLabel):
         """Set whether we're drawing syringe or gas."""
         self.is_drawing_syringe = is_syringe
         self.cancel_current_drawing()
+
+    def set_brush_eraser(self, enabled: bool):
+        """Enable or disable brush eraser mode."""
+        self.is_brush_eraser = enabled
+        if enabled:
+            self.current_tool = 'brush'
+        self.cancel_current_drawing()
+        self.update()
+
+    def increase_brush_radius(self, amount: int = 5):
+        """Increase brush radius."""
+        self.brush_radius = min(self.max_brush_radius, self.brush_radius + amount)
+        self.brush_radius_changed.emit(self.brush_radius)
+        self.update()
+
+    def decrease_brush_radius(self, amount: int = 5):
+        """Decrease brush radius."""
+        self.brush_radius = max(self.min_brush_radius, self.brush_radius - amount)
+        self.brush_radius_changed.emit(self.brush_radius)
+        self.update()
 
     def cancel_current_drawing(self):
         """Cancel any ongoing drawing operation."""
@@ -220,9 +248,14 @@ class DrawingCanvas(QLabel):
 
             # Draw eraser shapes - Dark red/maroon (shows as "erased" areas)
             for shape in self.eraser_shapes:
-                pts = shape.to_numpy()
-                if len(pts) >= 3:
-                    cv2.fillPoly(overlay, [pts], (40, 40, 80))  # Dark color to show erasure
+                if shape.shape_type == 'brush' and shape.radius is not None:
+                    # Draw brush strokes as circles at each point
+                    for pt in shape.points:
+                        cv2.circle(overlay, pt, shape.radius, (40, 40, 80), -1)
+                else:
+                    pts = shape.to_numpy()
+                    if len(pts) >= 3:
+                        cv2.fillPoly(overlay, [pts], (40, 40, 80))  # Dark color to show erasure
 
             # Blend overlay
             alpha = self.overlay_opacity
@@ -303,6 +336,26 @@ class DrawingCanvas(QLabel):
                 painter.setBrush(brush)
                 painter.drawRect(QRect(p1, p2))
 
+        # Draw current brush stroke being drawn
+        elif self.current_tool == 'brush' and self.is_drawing and len(self.current_points) > 0:
+            eraser_pen = QPen(QColor(248, 113, 113, 200), 2)
+            eraser_brush = QBrush(QColor(248, 113, 113, 60))
+            painter.setPen(eraser_pen)
+            painter.setBrush(eraser_brush)
+            scaled_radius = int(self.brush_radius * self.scale_factor)
+            for pt in self.current_points:
+                widget_pt = self.image_to_widget_coords(pt[0], pt[1])
+                painter.drawEllipse(widget_pt, scaled_radius, scaled_radius)
+
+        # Draw brush cursor preview (dashed red circle)
+        if self.current_tool == 'brush' and self.is_brush_eraser and self.brush_preview_pos is not None:
+            preview_pen = QPen(QColor(248, 113, 113, 220), 2, Qt.DashLine)
+            painter.setPen(preview_pen)
+            painter.setBrush(Qt.NoBrush)
+            scaled_radius = int(self.brush_radius * self.scale_factor)
+            widget_pt = self.image_to_widget_coords(self.brush_preview_pos[0], self.brush_preview_pos[1])
+            painter.drawEllipse(widget_pt, scaled_radius, scaled_radius)
+
         painter.end()
 
     def mousePressEvent(self, event):
@@ -347,6 +400,11 @@ class DrawingCanvas(QLabel):
                 self.current_points = [(img_x, img_y)]
                 self.update()
 
+            elif self.current_tool == 'brush':
+                self.is_drawing = True
+                self.current_points = [(img_x, img_y)]
+                self.update()
+
         elif event.button() == Qt.RightButton:
             # Complete current shape
             self._complete_shape()
@@ -360,6 +418,14 @@ class DrawingCanvas(QLabel):
 
         if self.original_image is None:
             return
+
+        # Update brush preview position
+        if self.current_tool == 'brush' and self.is_brush_eraser:
+            if self.is_valid_image_coord(img_x, img_y):
+                self.brush_preview_pos = (img_x, img_y)
+            else:
+                self.brush_preview_pos = None
+            self.update()
 
         # Panning Update
         if self.is_panning:
@@ -389,6 +455,19 @@ class DrawingCanvas(QLabel):
                         self.current_points.append((img_x, img_y))
                     self.update()
 
+                elif self.current_tool == 'brush':
+                    # Add point with spacing based on radius for smooth brush stroke
+                    if len(self.current_points) > 0:
+                        last_x, last_y = self.current_points[-1]
+                        dist = ((img_x - last_x) ** 2 + (img_y - last_y) ** 2) ** 0.5
+                        # Spacing is fraction of radius for smooth coverage
+                        spacing = max(2, self.brush_radius // 3)
+                        if dist >= spacing:
+                            self.current_points.append((img_x, img_y))
+                    else:
+                        self.current_points.append((img_x, img_y))
+                    self.update()
+
     def mouseReleaseEvent(self, event):
         """Handle mouse release."""
         # End Panning
@@ -406,6 +485,9 @@ class DrawingCanvas(QLabel):
             elif self.current_tool == 'rectangle' and self.is_drawing:
                 self._complete_shape()
 
+            elif self.current_tool == 'brush' and self.is_drawing:
+                self._complete_shape()
+
     def mouseDoubleClickEvent(self, event):
         """Handle double click to complete polygon."""
         if event.button() == Qt.LeftButton and self.current_tool == 'polygon':
@@ -413,6 +495,18 @@ class DrawingCanvas(QLabel):
 
     def _complete_shape(self):
         """Complete the current shape and emit signal."""
+        # Brush shapes only need 1 point minimum
+        if self.current_tool == 'brush':
+            if len(self.current_points) >= 1:
+                shape = Shape(
+                    shape_type='brush',
+                    points=list(self.current_points),
+                    radius=self.brush_radius
+                )
+                self.shape_completed.emit(shape)
+            self.cancel_current_drawing()
+            return
+
         if len(self.current_points) < 3 and self.current_tool != 'rectangle':
             self.cancel_current_drawing()
             return
@@ -466,7 +560,9 @@ class DrawingCanvas(QLabel):
         """Reset state when mouse leaves."""
         self.is_space_pressed = False
         self.is_panning = False
+        self.brush_preview_pos = None  # Clear brush preview
         self.setCursor(Qt.ArrowCursor)
+        self.update()
         super().leaveEvent(event)
 
     def focusOutEvent(self, event):

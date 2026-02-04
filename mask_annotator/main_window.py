@@ -190,6 +190,7 @@ class MethaneAnnotator(QMainWindow):
         self.canvas.shape_completed.connect(self._on_shape_completed)
         self.canvas.mouse_moved.connect(self._on_mouse_moved)
         self.canvas.zoom_changed.connect(self._on_zoom_changed)
+        self.canvas.brush_radius_changed.connect(self._on_brush_radius_changed)
         content_splitter.addWidget(self.canvas)
 
         # Tools panel with scroll area - resizable via splitter
@@ -305,6 +306,17 @@ class MethaneAnnotator(QMainWindow):
         self.eraser_radio.setStyleSheet("color: #f87171;")  # Red tint for eraser
         self.tool_group.addButton(self.eraser_radio)
         gas_layout.addWidget(self.eraser_radio)
+
+        self.brush_eraser_radio = QRadioButton("Brush Eraser  (adjustable radius)")
+        self.brush_eraser_radio.setStyleSheet("color: #f87171;")  # Red tint for eraser
+        self.tool_group.addButton(self.brush_eraser_radio)
+        gas_layout.addWidget(self.brush_eraser_radio)
+
+        # Brush size label (shown only when brush eraser is active)
+        self.brush_size_label = QLabel(f"Brush size: 20px  ([ ] to adjust)")
+        self.brush_size_label.setStyleSheet(f"color: #f87171; font-size: {s(10)}px; margin-left: {s(16)}px;")
+        self.brush_size_label.setVisible(False)
+        gas_layout.addWidget(self.brush_size_label)
 
         self.tool_group.buttonClicked.connect(self._on_tool_changed)
 
@@ -486,7 +498,8 @@ class MethaneAnnotator(QMainWindow):
             ("←/→ A/D", "Navigate"),
             ("S", "Save"),
             ("Ctrl+S", "Save & Next"),
-            ("1/2/3/4", "Tools"),
+            ("1/2/3/4/5", "Tools"),
+            ("[ ]", "Brush size"),
             ("T", "New syringe"),
             ("Shift+T", "Extend syringe"),
             ("Ctrl+Z/Y", "Undo/Redo"),
@@ -562,6 +575,11 @@ class MethaneAnnotator(QMainWindow):
         QShortcut(QKeySequence(Qt.Key_2), self, lambda: self._select_tool('freehand'))
         QShortcut(QKeySequence(Qt.Key_3), self, lambda: self._select_tool('rectangle'))
         QShortcut(QKeySequence(Qt.Key_4), self, lambda: self._select_tool('eraser'))
+        QShortcut(QKeySequence(Qt.Key_5), self, lambda: self._select_tool('brush_eraser'))
+
+        # Brush size controls
+        QShortcut(QKeySequence(Qt.Key_BracketLeft), self, self._decrease_brush_size)
+        QShortcut(QKeySequence(Qt.Key_BracketRight), self, self._increase_brush_size)
 
         # Undo/Redo
         QShortcut(QKeySequence("Ctrl+Z"), self, self._undo)
@@ -633,6 +651,18 @@ class MethaneAnnotator(QMainWindow):
         """Decrease overlay opacity by 10%."""
         current = self.opacity_slider.value()
         self.opacity_slider.setValue(max(0, current - 10))
+
+    def _increase_brush_size(self):
+        """Increase brush eraser size."""
+        self.canvas.increase_brush_radius()
+
+    def _decrease_brush_size(self):
+        """Decrease brush eraser size."""
+        self.canvas.decrease_brush_radius()
+
+    def _on_brush_radius_changed(self, radius: int):
+        """Handle brush radius change from canvas."""
+        self.brush_size_label.setText(f"Brush size: {radius}px  ([ ] to adjust)")
 
     def _zoom_in(self):
         """Zoom in the canvas."""
@@ -1093,6 +1123,8 @@ class MethaneAnnotator(QMainWindow):
     def _on_tool_changed(self, button):
         """Handle tool selection change."""
         self.is_eraser_mode = False
+        self.brush_size_label.setVisible(False)  # Hide brush size label by default
+        self.canvas.set_brush_eraser(False)  # Disable brush eraser by default
 
         # If drawing syringe, switch back to gas mode automatically
         if self.draw_syringe_btn.isChecked() or self.extend_syringe_btn.isChecked():
@@ -1115,11 +1147,20 @@ class MethaneAnnotator(QMainWindow):
             self.is_eraser_mode = True
             self.tool_label.setText("Tool: Eraser")
             self.tool_label.setStyleSheet("color: #f87171;")
+        elif button == self.brush_eraser_radio:
+            self.canvas.set_brush_eraser(True)
+            self.is_eraser_mode = True
+            self.tool_label.setText("Tool: Brush Eraser")
+            self.tool_label.setStyleSheet("color: #f87171;")
+            self.brush_size_label.setVisible(True)
+            self.brush_size_label.setText(f"Brush size: {self.canvas.brush_radius}px  ([ ] to adjust)")
 
     def _select_tool(self, tool: str):
         """Select tool by name."""
         self.is_eraser_mode = False
         self.tool_label.setStyleSheet("color: #fbbf24;")  # Reset to default color
+        self.brush_size_label.setVisible(False)  # Hide brush size label by default
+        self.canvas.set_brush_eraser(False)  # Disable brush eraser by default
 
         if tool == 'polygon':
             self.polygon_radio.setChecked(True)
@@ -1133,6 +1174,15 @@ class MethaneAnnotator(QMainWindow):
             self.tool_label.setStyleSheet("color: #f87171;")
             self.canvas.set_tool('freehand')  # Eraser uses freehand
             self.tool_label.setText("Tool: Eraser")
+            return
+        elif tool == 'brush_eraser':
+            self.brush_eraser_radio.setChecked(True)
+            self.is_eraser_mode = True
+            self.tool_label.setStyleSheet("color: #f87171;")
+            self.canvas.set_brush_eraser(True)
+            self.tool_label.setText("Tool: Brush Eraser")
+            self.brush_size_label.setVisible(True)
+            self.brush_size_label.setText(f"Brush size: {self.canvas.brush_radius}px  ([ ] to adjust)")
             return
 
         self.canvas.set_tool(tool)
@@ -1594,9 +1644,14 @@ class MethaneAnnotator(QMainWindow):
 
         # Apply eraser shapes (set to 0) - erases gas regions (existing + new)
         for shape in self.eraser_shapes:
-            pts = shape.to_numpy()
-            if len(pts) >= 3:
-                cv2.fillPoly(mask, [pts], 0)
+            if shape.shape_type == 'brush' and shape.radius is not None:
+                # Draw brush strokes as circles at each point
+                for pt in shape.points:
+                    cv2.circle(mask, pt, shape.radius, 0, -1)
+            else:
+                pts = shape.to_numpy()
+                if len(pts) >= 3:
+                    cv2.fillPoly(mask, [pts], 0)
 
         # Save mask
         mask_path = Path(self.session.masks_folder) / image_name

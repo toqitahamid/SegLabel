@@ -13,9 +13,10 @@ import numpy as np
 
 @dataclass
 class Shape:
-    """Represents a drawn shape (polygon, freehand path, or rectangle)."""
-    shape_type: str  # 'polygon', 'freehand', 'rectangle'
+    """Represents a drawn shape (polygon, freehand path, rectangle, or brush)."""
+    shape_type: str  # 'polygon', 'freehand', 'rectangle', 'brush'
     points: List[Tuple[int, int]]  # List of (x, y) coordinates
+    radius: Optional[int] = None  # Only for 'brush' type
 
     def to_numpy(self) -> np.ndarray:
         """Convert points to numpy array for cv2.fillPoly."""
@@ -29,19 +30,30 @@ class SyringeVersion:
     shapes: List[Shape] = field(default_factory=list)
 
     def to_dict(self) -> dict:
+        shapes_data = []
+        for s in self.shapes:
+            shape_dict = {"type": s.shape_type, "points": s.points}
+            if s.radius is not None:
+                shape_dict["radius"] = s.radius
+            shapes_data.append(shape_dict)
         return {
             "start_index": self.start_index,
-            "shapes": [{"type": s.shape_type, "points": s.points} for s in self.shapes]
+            "shapes": shapes_data
         }
 
     @classmethod
     def from_dict(cls, data: dict) -> 'SyringeVersion':
+        shapes = []
+        for s in data.get("shapes", []):
+            shape = Shape(
+                shape_type=s["type"],
+                points=[tuple(p) for p in s["points"]],
+                radius=s.get("radius")
+            )
+            shapes.append(shape)
         return cls(
             start_index=data.get("start_index", 0),
-            shapes=[
-                Shape(shape_type=s["type"], points=[tuple(p) for p in s["points"]])
-                for s in data.get("shapes", [])
-            ]
+            shapes=shapes
         )
 
 
