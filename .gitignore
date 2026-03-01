@@ -36,6 +36,9 @@ env/
 # Claude Code
 .claude/
 
+# Serena
+.serena/
+
 # Test files
 test_*.py
 reproduce_*.py
